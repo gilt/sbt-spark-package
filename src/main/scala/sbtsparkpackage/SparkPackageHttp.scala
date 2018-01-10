@@ -9,6 +9,8 @@ import SparkPackagePlugin.autoImport._
 import SparkPackagePlugin._
 import java.io.{BufferedInputStream, FileInputStream, InputStream}
 
+import scala.sys.process._
+
 object SparkPackageHttp {
 
   private val SPARK_PACKAGES_HOST = "spark-packages.org"
@@ -72,8 +74,10 @@ object SparkPackageHttp {
         val releaseVersion = packageVersion.value
         var params = Seq("git_commit_sha1" -> git_commit_sha1, "version" -> releaseVersion,
           "license_id" -> licenseId.toString, "name" -> spName.value)
+        val ivyModuleValue = ivyModule.value
+        val streamsValue = streams.value
         if (spIncludeMaven.value) {
-          val mrId = ivyModule.value.moduleDescriptor(streams.value.log).getModuleRevisionId
+          val mrId = ivyModuleValue.moduleDescriptor(streamsValue.log).getModuleRevisionId
           params ++= Seq("maven_coordinate" -> s"${mrId.getOrganisation}:${mrId.getName}")
         }
         def url = Seq("https:/", SPARK_PACKAGES_HOST, "api", "submit-release").mkString("/")

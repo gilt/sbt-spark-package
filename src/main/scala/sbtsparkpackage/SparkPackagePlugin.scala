@@ -9,10 +9,15 @@ import Path.relativeTo
 import sbtassembly.AssemblyPlugin
 import sbtassembly.MappingSet
 import sbtassembly.AssemblyKeys.{assembledMappings, assembly}
+
 import scala.io.Source._
 import scala.xml.{Elem, Node, NodeBuffer, NodeSeq, Null, Text, TopScope}
 import java.io.{File => JavaFile}
+
 import SparkPackageHttp._
+import sbt.internal.librarymanagement.{CustomPomParser, IvyActions}
+
+import scala.sys.process._
 
 object SparkPackagePlugin extends AutoPlugin {
 
@@ -238,12 +243,14 @@ object SparkPackagePlugin extends AutoPlugin {
     for(task <- spPackageKeys; conf <- Seq(Compile, Test)) yield (task in conf)
   lazy val spArtifactTasks: Seq[TaskKey[File]] = spMakePom +: spPackages
 
-  def spDeliverTask(config: TaskKey[DeliverConfiguration]) =
-    (ivyModule in spDist, config, update, streams) map { (module, config, _, s) => IvyActions.deliver(module, config, s.log) }
-  def spPublishTask(config: TaskKey[PublishConfiguration], deliverKey: TaskKey[_]) =
-    (ivyModule in spDist, config, streams) map { (module, config, s) =>
-      IvyActions.publish(module, config, s.log)
-    } tag(Tags.Publish, Tags.Network)
+  def spDeliverTask(configTaskKey: TaskKey[PublishConfiguration]) = {
+    IvyActions.deliver((ivyModule in spDist).value, configTaskKey.value, streams.value.log)
+  }
+
+  def spPublishTask(config: TaskKey[PublishConfiguration], deliverKey: TaskKey[_]) = {
+    val taggedConfig = config.tag(Tags.Publish, Tags.Network)
+    IvyActions.publish((ivyModule in spDist).value, taggedConfig.value, streams.value.log)
+  }
 
   private def getInitialCommandsForConsole: Def.Initialize[String] = Def.settingDyn {
     val base = """ println("Welcome to\n" +
@@ -327,8 +334,8 @@ object SparkPackagePlugin extends AutoPlugin {
         ("Spark-HasRPackage", (listRSource.value.length > 0).toString)),
       spMakePom := {
         val config = makePomConfiguration.value
-        IvyActions.makePom((ivyModule in spDist).value, config, streams.value.log)
-        config.file
+        IvyActions.makePomFile((ivyModule in spDist).value, config, streams.value.log)
+        config.file.get
       },
       spDist := {
         val spArtifactName = spBaseArtifactName(spName.value, packageVersion.value)
@@ -367,17 +374,17 @@ object SparkPackagePlugin extends AutoPlugin {
   }
 
   lazy val spPublishingSettings: Seq[Setting[_]] = Seq(
-    publishLocalConfiguration in spPublishLocal := Classpaths.publishConfig(
-      packagedArtifacts.in(spPublishLocal).value, Some(deliverLocal.value),
-      checksums.in(publishLocal).value, logging = ivyLoggingLevel.value),
-    packagedArtifacts in spPublishLocal <<= Classpaths.packaged(spArtifactTasks),
+    publishLocalConfiguration in spPublishLocal := Classpaths.publishConfig(publishMavenStyle = true,
+      artifacts = packagedArtifacts.in(spPublishLocal).value,
+      checksums = checksums.in(publishLocal).value),
+    packagedArtifacts in spPublishLocal := {Classpaths.packaged(spArtifactTasks).value},
     packagedArtifact in spMakePom := ((artifact in spMakePom).value, spMakePom.value),
-    artifacts <<= Classpaths.artifactDefs(spArtifactTasks),
-    deliverLocal in spPublishLocal <<= spDeliverTask(deliverLocalConfiguration),
-    spPublishLocal <<= spPublishTask(publishLocalConfiguration in spPublishLocal, deliverLocal in spPublishLocal),
+    artifacts := {Classpaths.artifactDefs(spArtifactTasks).value},
+    deliverLocal in spPublishLocal := spDeliverTask(publishLocalConfiguration in spPublishLocal),
+    spPublishLocal := spPublishTask(publishLocalConfiguration in spPublishLocal, deliverLocal in spPublishLocal),
     moduleSettings in spPublishLocal := new InlineConfiguration(spProjectID.value,
       projectInfo.value, allDependencies.value, dependencyOverrides.value, ivyXML.value,
-      ivyConfigurations.value, defaultConfiguration.value, ivyScala.value, ivyValidate.value,
+      ivyConfigurations.value, defaultConfiguration.value, ivyValidate.value,
       conflictManager.value),
     ivyModule in spDist := { val is = ivySbt.value; new is.Module((moduleSettings in spPublishLocal).value) }
   )
