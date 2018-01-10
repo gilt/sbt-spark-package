@@ -373,7 +373,7 @@ object SparkPackagePlugin extends AutoPlugin {
   }
 
   lazy val spPublishingSettings: Seq[Setting[_]] = Seq(
-    publishLocalConfiguration in spPublishLocal := Classpaths.publishConfig(publishMavenStyle = true,
+    publishLocalConfiguration in spPublishLocal := Classpaths.publishConfig(publishMavenStyle = publishMavenStyle.value,
       deliverIvyPattern = (publishLocalConfiguration in spPublishLocal).value.deliverIvyPattern.get,
       status = (publishLocalConfiguration in spPublishLocal).value.status.getOrElse("release"),
       configurations = (publishLocalConfiguration in spPublishLocal).value.configurations.getOrElse(Vector.empty),
