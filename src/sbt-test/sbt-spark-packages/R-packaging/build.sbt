@@ -8,27 +8,27 @@ name := "r-packaging"
 
 organization := "awesome.test"
 
-TaskKey[Unit]("checkZip") <<= (target) map { (target) =>
+TaskKey[Unit]("checkZip") := Def.task {
   IO.withTemporaryDirectory { dir =>
-    IO.unzip(target / "r-packaging-0.1.zip", dir)
+    IO.unzip(target.value / "r-packaging-0.1.zip", dir)
     mustExist(dir / "r-packaging-0.1.jar")
     jarContentChecks(dir / "r-packaging-0.1.jar", true)
     validatePom(dir / "r-packaging-0.1.pom", "test", "r-packaging")
   }
-}
+}.value
 
-TaskKey[Unit]("checkAssemblyJar") <<= (crossTarget) map { (crossTarget) =>
+TaskKey[Unit]("checkAssemblyJar") := Def.task {
   IO.withTemporaryDirectory { dir =>
-    jarContentChecks(crossTarget / "r-packaging-assembly-0.1.jar", true)
+    jarContentChecks(crossTarget.value / "r-packaging-assembly-0.1.jar", true)
   }
-}
+}.value
 
-TaskKey[Unit]("checkBinJar") <<= (crossTarget) map { (crossTarget) =>
+TaskKey[Unit]("checkBinJar") := Def.task {
   IO.withTemporaryDirectory { dir =>
-    jarContentChecks(crossTarget / "r-packaging_2.10-0.1.jar", false)
-    validatePom(crossTarget / "r-packaging_2.10-0.1.pom", "awesome.test", "r-packaging_2.10")
+    jarContentChecks(crossTarget.value / "r-packaging_2.10-0.1.jar", false)
+    validatePom(crossTarget.value / "r-packaging_2.10-0.1.pom", "awesome.test", "r-packaging_2.10")
   }
-}
+}.value
 
 def validatePom(file: File, groupId: String, artifactId: String): Unit = {
   import scala.xml.XML

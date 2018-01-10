@@ -243,14 +243,13 @@ object SparkPackagePlugin extends AutoPlugin {
     for(task <- spPackageKeys; conf <- Seq(Compile, Test)) yield (task in conf)
   lazy val spArtifactTasks: Seq[TaskKey[File]] = spMakePom +: spPackages
 
-  def spDeliverTask(configTaskKey: TaskKey[PublishConfiguration]) = {
+  def spDeliverTask(configTaskKey: TaskKey[PublishConfiguration]) = Def.task {
     IvyActions.deliver((ivyModule in spDist).value, configTaskKey.value, streams.value.log)
   }
 
-  def spPublishTask(config: TaskKey[PublishConfiguration], deliverKey: TaskKey[_]) = {
-    val taggedConfig = config.tag(Tags.Publish, Tags.Network)
-    IvyActions.publish((ivyModule in spDist).value, taggedConfig.value, streams.value.log)
-  }
+  def spPublishTask(config: TaskKey[PublishConfiguration], deliverKey: TaskKey[_]) = Def.task {
+    IvyActions.publish((ivyModule in spDist).value, config.value, streams.value.log)
+  }.tag(Tags.Publish, Tags.Network)
 
   private def getInitialCommandsForConsole: Def.Initialize[String] = Def.settingDyn {
     val base = """ println("Welcome to\n" +
@@ -349,8 +348,8 @@ object SparkPackagePlugin extends AutoPlugin {
         println(s"\nZip File created at: $zipFile\n")
         zipFile
       },
-      spPublish <<= makeReleaseCall(spDist),
-      spRegister <<= makeRegisterCall,
+      spPublish := { makeReleaseCall(spDist).value },
+      spRegister := { makeRegisterCall.value },
       initialCommands in console := getInitialCommandsForConsole.value,
       cleanupCommands in console := "sc.stop()",
       spShade := false
@@ -375,17 +374,28 @@ object SparkPackagePlugin extends AutoPlugin {
 
   lazy val spPublishingSettings: Seq[Setting[_]] = Seq(
     publishLocalConfiguration in spPublishLocal := Classpaths.publishConfig(publishMavenStyle = true,
-      artifacts = packagedArtifacts.in(spPublishLocal).value,
-      checksums = checksums.in(publishLocal).value),
+      deliverIvyPattern = (publishLocalConfiguration in spPublishLocal).value.deliverIvyPattern.get,
+      status = (publishLocalConfiguration in spPublishLocal).value.status.getOrElse("release"),
+      configurations = (publishLocalConfiguration in spPublishLocal).value.configurations.getOrElse(Vector.empty),
+      artifacts = packagedArtifacts.in(spPublishLocal).value.toVector,
+      checksums = checksums.in(publishLocal).value.toVector),
     packagedArtifacts in spPublishLocal := {Classpaths.packaged(spArtifactTasks).value},
     packagedArtifact in spMakePom := ((artifact in spMakePom).value, spMakePom.value),
     artifacts := {Classpaths.artifactDefs(spArtifactTasks).value},
-    deliverLocal in spPublishLocal := spDeliverTask(publishLocalConfiguration in spPublishLocal),
-    spPublishLocal := spPublishTask(publishLocalConfiguration in spPublishLocal, deliverLocal in spPublishLocal),
-    moduleSettings in spPublishLocal := new InlineConfiguration(spProjectID.value,
-      projectInfo.value, allDependencies.value, dependencyOverrides.value, ivyXML.value,
-      ivyConfigurations.value, defaultConfiguration.value, ivyValidate.value,
-      conflictManager.value),
+    deliverLocal in spPublishLocal := {spDeliverTask(publishLocalConfiguration in spPublishLocal).value},
+    spPublishLocal := { spPublishTask(publishLocalConfiguration in spPublishLocal, deliverLocal in spPublishLocal).value },
+    moduleSettings in spPublishLocal := InlineConfiguration.apply(validate = ivyValidate.value,
+      scalaModuleInfo = scalaModuleInfo.value,
+      module = spProjectID.value,
+      moduleInfo = projectInfo.value,
+      dependencies = allDependencies.value.toVector,
+      overrides = dependencyOverrides.value.toVector,
+      excludes = excludeDependencies.value.toVector,
+      ivyXML = ivyXML.value,
+      configurations = ivyConfigurations.value.toVector,
+      defaultConfiguration = defaultConfiguration.value,
+      conflictManager = conflictManager.value),
     ivyModule in spDist := { val is = ivySbt.value; new is.Module((moduleSettings in spPublishLocal).value) }
   )
+
 }

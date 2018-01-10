@@ -1,15 +1,15 @@
 
 import Shading._
 
-TaskKey[Unit]("checkZip") <<= (target) map { (target) =>
+TaskKey[Unit]("checkZip") := Def.task {
   IO.withTemporaryDirectory { dir =>
-    IO.unzip(target / "shading-0.1.zip", dir)
+    IO.unzip(target.value / "shading-0.1.zip", dir)
     mustExist(dir / "shading-0.1.jar")
     jarContentChecks(dir / "shading-0.1.jar", python = true)
     validatePom(dir / "shading-0.1.pom", "test", "shading", Seq(
       "commons-proxy" -> true, "commons-weaver-antlib" -> false))
   }
-}
+}.value
 
 def jarContentChecks(dir: File, python: Boolean): Unit = {
   IO.withTemporaryDirectory { jarDir =>

@@ -83,21 +83,19 @@ object SparkPackageHttp {
         def url = Seq("https:/", SPARK_PACKAGES_HOST, "api", "submit-release").mkString("/")
         
         val fileBytes = new Array[Byte](archive.length.toInt)
+        var input: InputStream = null
         try {
-          var input: InputStream = null
-          try {
-            var totalBytesRead = 0
-            input = new BufferedInputStream(new FileInputStream(archive))
-            while(totalBytesRead < fileBytes.length){
-              val bytesRemaining = fileBytes.length - totalBytesRead
-              val bytesRead = input.read(fileBytes, totalBytesRead, bytesRemaining)
-              if (bytesRead > 0){
-                totalBytesRead = totalBytesRead + bytesRead
-              }
+          var totalBytesRead = 0
+          input = new BufferedInputStream(new FileInputStream(archive))
+          while(totalBytesRead < fileBytes.length){
+            val bytesRemaining = fileBytes.length - totalBytesRead
+            val bytesRead = input.read(fileBytes, totalBytesRead, bytesRemaining)
+            if (bytesRead > 0){
+              totalBytesRead = totalBytesRead + bytesRead
             }
-          } finally {
-            input.close()
           }
+        } finally {
+          input.close()
         }
         val auth = getAuth(credentials.value)
 
